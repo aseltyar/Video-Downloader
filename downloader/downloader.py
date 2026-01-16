@@ -123,8 +123,7 @@ def download_video(url: str, format_spec: str, progress_id: str = None) -> str:
     if not is_valid_url(url):
         raise ValueError("Invalid URL provided.")
 
-    if format_type not in ['mp4', 'mp3']:
-        raise ValueError("Unsupported format. Use 'mp4' or 'mp3'.")
+    # No format validation needed since we're using specific format IDs
 
     # Create a downloads directory in MEDIA_ROOT
     download_dir = os.path.join(settings.MEDIA_ROOT, 'downloads')
@@ -158,8 +157,8 @@ def download_video(url: str, format_spec: str, progress_id: str = None) -> str:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
-            # If mp3, the filename will be updated after postprocessing
-            if format_type == 'mp3':
+            # If audio format, the filename will be updated after postprocessing
+            if 'audio' in format_spec.lower() or 'mp3' in format_spec.lower():
                 filename = filename.rsplit('.', 1)[0] + '.mp3'
 
             # Verify file exists and has content
