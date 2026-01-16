@@ -1,9 +1,6 @@
+# Railway configuration for FFmpeg
 [build]
 builder = "Nixpacks"
-
-[deploy]
-healthcheckPath = "/"
-restartPolicyType = "ON_FAILURE"
 
 [build.nixpacks]
 aptPkgs = ["ffmpeg"]
