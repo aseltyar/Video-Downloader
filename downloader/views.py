@@ -53,34 +53,40 @@ def get_progress(request, progress_id):
     return JsonResponse(progress)
 
 def download_file(request, progress_id):
-    import logging
-    logger = logging.getLogger(__name__)
+    try:
+        import logging
+        logger = logging.getLogger(__name__)
 
-    file_path = cache.get(f"{progress_id}_file")
-    logger.error(f"Download file request for progress_id: {progress_id}")
-    logger.error(f"File path from cache: {file_path}")
+        file_path = cache.get(f"{progress_id}_file")
+        logger.error(f"Download file request for progress_id: {progress_id}")
+        logger.error(f"File path from cache: {file_path}")
 
-    if file_path:
-        logger.error(f"File path exists: {file_path}")
-        if os.path.exists(file_path):
-            logger.error(f"File exists on disk: {file_path}")
-            try:
-                file_size = os.path.getsize(file_path)
-                logger.error(f"File size: {file_size}")
-                file_handle = open(file_path, 'rb')
-                response = FileResponse(file_handle, as_attachment=True, filename=os.path.basename(file_path))
-                return response
-            except Exception as e:
-                logger.error(f"File open error: {e}")
-                return JsonResponse({'error': f'File error: {str(e)}'})
+        if file_path:
+            logger.error(f"File path exists: {file_path}")
+            if os.path.exists(file_path):
+                logger.error(f"File exists on disk: {file_path}")
+                try:
+                    file_size = os.path.getsize(file_path)
+                    logger.error(f"File size: {file_size}")
+                    file_handle = open(file_path, 'rb')
+                    response = FileResponse(file_handle, as_attachment=True, filename=os.path.basename(file_path))
+                    return response
+                except Exception as e:
+                    logger.error(f"File open error: {e}")
+                    return JsonResponse({'error': f'File error: {str(e)}'})
+            else:
+                logger.error(f"File does not exist: {file_path}")
+                # List directory contents for debugging
+                dir_path = os.path.dirname(file_path)
+                if os.path.exists(dir_path):
+                    contents = os.listdir(dir_path)
+                    logger.error(f"Directory contents: {contents}")
+                return JsonResponse({'error': f'File not found: {file_path}'})
         else:
-            logger.error(f"File does not exist: {file_path}")
-            # List directory contents for debugging
-            dir_path = os.path.dirname(file_path)
-            if os.path.exists(dir_path):
-                contents = os.listdir(dir_path)
-                logger.error(f"Directory contents: {contents}")
-            return JsonResponse({'error': f'File not found: {file_path}'})
-    else:
-        logger.error("No file path in cache")
-        return JsonResponse({'error': 'File not ready or not found'})
+            logger.error("No file path in cache")
+            return JsonResponse({'error': 'File not ready or not found'})
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Unexpected error in download_file: {e}")
+        return JsonResponse({'error': f'Server error: {str(e)}'})
