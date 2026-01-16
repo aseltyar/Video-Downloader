@@ -4,6 +4,7 @@ import tempfile
 import logging
 from urllib.parse import urlparse
 from django.core.cache import cache
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +64,10 @@ def download_video(url: str, format_type: str, progress_id: str = None) -> str:
     if format_type not in ['mp4', 'mp3']:
         raise ValueError("Unsupported format. Use 'mp4' or 'mp3'.")
 
-    # Create a temporary directory for downloads
-    temp_dir = tempfile.mkdtemp()
+    # Create a downloads directory in MEDIA_ROOT
+    download_dir = os.path.join(settings.MEDIA_ROOT, 'downloads')
+    os.makedirs(download_dir, exist_ok=True)
+    temp_dir = download_dir
 
     hooks = []
     if progress_id:
