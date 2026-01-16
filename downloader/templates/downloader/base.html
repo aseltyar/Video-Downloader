@@ -1,0 +1,23 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Video Downloader{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'downloader/css/style.css' %}">
+    <link rel="icon" type="image/x-icon" href="{% static 'downloader/favicon.ico' %}">
+</head>
+<body>
+    <header>
+        <img src="{% static 'downloader/video.png' %}" alt="VideoDownloader.ico" width=150>
+        {% comment %} <h1>Video Downloader</h1> {% endcomment %}
+    </header>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    <footer>
+        <p>&copy; 2026 Video Downloader</p>
+    </footer>
+</body>
+</html>

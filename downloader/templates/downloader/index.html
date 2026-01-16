@@ -1,0 +1,106 @@
+{% extends 'downloader/base.html' %}
+
+{% block content %}
+<div class="container">
+    <h2>Download Videos from YouTube, Facebook, and Twitter</h2>
+    {% if error %}
+        <div class="error">{{ error }}</div>
+    {% endif %}
+    <form id="downloadForm">
+        {% csrf_token %}
+        <div class="form-group">
+            <label for="url">Video URL:</label>
+            <input type="url" id="url" name="url" required placeholder="https://www.youtube.com/watch?v=...">
+        </div>
+
+        <div class="form-group">
+            <label for="format">Format:</label>
+            <select id="format" name="format" required>
+                <option value="">Select Format</option>
+                <option value="mp4">MP4 (Video)</option>
+                <option value="mp3">MP3 (Audio)</option>
+            </select>
+        </div>
+
+        <button type="submit">Download</button>
+    </form>
+
+    <div id="progressContainer" style="display: none;">
+        <h3>Downloading...</h3>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <p id="progressText">0%</p>
+    </div>
+</div>
+
+<script>
+document.getElementById('url').addEventListener('input', function() {
+    const errorDiv = document.querySelector('.error');
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+    }
+});
+
+document.getElementById('downloadForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    const data = {
+        url: formData.get('url'),
+        format: formData.get('format')
+    };
+
+    fetch('', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.error) {
+            alert(result.error);
+        } else {
+            pollProgress(result.progress_id);
+        }
+    })
+    .catch(error => {
+        alert('Error: ' + error);
+    });
+});
+
+function pollProgress(progressId) {
+    document.getElementById('downloadForm').style.display = 'none';
+    document.getElementById('progressContainer').style.display = 'block';
+
+    const interval = setInterval(() => {
+        fetch(`/progress/${progressId}/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'downloading') {
+                document.getElementById('progressFill').style.width = data.percent + '%';
+                document.getElementById('progressText').textContent = `${data.percent}% - ${data.speed} - ETA: ${data.eta}`;
+            } else if (data.status === 'finished' || data.status === 'completed') {
+                clearInterval(interval);
+                document.getElementById('progressFill').style.width = '100%';
+                document.getElementById('progressText').textContent = 'Download complete! Starting download...';
+                setTimeout(() => {
+                    window.location.href = `/download/${progressId}/`;
+                }, 1000);
+            } else if (data.status === 'error') {
+                clearInterval(interval);
+                alert('Download failed: ' + data.error);
+                location.reload();
+            }
+        })
+        .catch(error => {
+            clearInterval(interval);
+            alert('Error checking progress: ' + error);
+            location.reload();
+        });
+    }, 1000);
+}
+</script>
+{% endblock %}
