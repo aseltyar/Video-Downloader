@@ -1,6 +1,5 @@
-from django.shortcuts import render, get_object_or_404
-from django.http import FileResponse, HttpResponseBadRequest, JsonResponse
-from django.conf import settings
+from django.shortcuts import render
+from django.http import FileResponse, JsonResponse
 from django.core.cache import cache
 from django.views.decorators.csrf import csrf_exempt
 import os
@@ -56,6 +55,11 @@ def get_progress(request, progress_id):
 def download_file(request, progress_id):
     file_path = cache.get(f"{progress_id}_file")
     if file_path and os.path.exists(file_path):
-        response = FileResponse(open(file_path, 'rb'), as_attachment=True, filename=os.path.basename(file_path))
-        return response
+        try:
+            file_handle = open(file_path, 'rb')
+            response = FileResponse(file_handle, as_attachment=True, filename=os.path.basename(file_path))
+            # File will be closed by FileResponse
+            return response
+        except Exception as e:
+            return JsonResponse({'error': f'File error: {str(e)}'})
     return JsonResponse({'error': 'File not ready or not found'})
