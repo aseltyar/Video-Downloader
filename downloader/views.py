@@ -2,11 +2,13 @@ from django.shortcuts import render, get_object_or_404
 from django.http import FileResponse, HttpResponseBadRequest, JsonResponse
 from django.conf import settings
 from django.core.cache import cache
+from django.views.decorators.csrf import csrf_exempt
 import os
 import uuid
 import threading
 from .downloader import download_video, is_valid_url
 
+@csrf_exempt
 def index(request):
     if request.method == 'POST':
         if request.headers.get('Content-Type') == 'application/json' or request.POST.get('ajax'):
