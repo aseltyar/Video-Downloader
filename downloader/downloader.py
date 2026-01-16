@@ -16,6 +16,68 @@ def is_valid_url(url: str) -> bool:
     except:
         return False
 
+def get_available_formats(url: str) -> list:
+    """
+    Get available formats for a video URL.
+
+    Args:
+        url (str): The URL to get formats for.
+
+    Returns:
+        list: List of available formats with metadata.
+    """
+    if not is_valid_url(url):
+        raise ValueError("Invalid URL provided.")
+
+    try:
+        with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
+            info = ydl.extract_info(url, download=False)
+            formats = []
+
+            for f in info.get('formats', []):
+                # Filter out very low quality or problematic formats
+                if f.get('filesize') and f.get('filesize') < 1024:  # Skip <1KB files
+                    continue
+
+                format_info = {
+                    'format_id': f.get('format_id', ''),
+                    'ext': f.get('ext', 'unknown'),
+                    'resolution': f.get('resolution', 'unknown') if f.get('vcodec') != 'none' else None,
+                    'filesize': f.get('filesize'),
+                    'filesize_str': f.get('filesize', 0) and f"{f['filesize'] / (1024*1024):.1f}MB" or 'Unknown',
+                    'vcodec': f.get('vcodec', 'none'),
+                    'acodec': f.get('acodec', 'none'),
+                    'format_note': f.get('format_note', ''),
+                    'fps': f.get('fps'),
+                }
+
+                # Categorize formats
+                if f.get('vcodec') != 'none' and f.get('acodec') != 'none':
+                    format_info['type'] = 'video+audio'
+                    format_info['label'] = f"{f.get('resolution', 'Unknown')} - {format_info['ext'].upper()}"
+                elif f.get('vcodec') != 'none':
+                    format_info['type'] = 'video'
+                    format_info['label'] = f"Video {f.get('resolution', 'Unknown')} - {format_info['ext'].upper()}"
+                elif f.get('acodec') != 'none':
+                    format_info['type'] = 'audio'
+                    format_info['label'] = f"Audio {f.get('abr', 'Unknown')}kbps - {format_info['ext'].upper()}"
+                else:
+                    continue
+
+                formats.append(format_info)
+
+            # Sort by quality (video first, then audio)
+            formats.sort(key=lambda x: (
+                0 if x['type'] == 'video+audio' else 1 if x['type'] == 'video' else 2,
+                x.get('filesize') or 0
+            ), reverse=True)
+
+            return formats[:20]  # Limit to top 20 formats
+
+    except Exception as e:
+        logger.error(f"Error getting formats: {e}")
+        raise Exception(f"Failed to get video formats: {str(e)}")
+
 def _progress_hook(progress_id):
     def hook(d):
         if d['status'] == 'downloading':
@@ -42,7 +104,7 @@ def _progress_hook(progress_id):
             }, 300)
     return hook
 
-def download_video(url: str, format_type: str, progress_id: str = None) -> str:
+def download_video(url: str, format_spec: str, progress_id: str = None) -> str:
     """
     Download video or audio from the given URL.
 
@@ -74,31 +136,23 @@ def download_video(url: str, format_type: str, progress_id: str = None) -> str:
         hooks.append(_progress_hook(progress_id))
         cache.set(progress_id, {'status': 'starting'}, 300)
 
-    if format_type == 'mp4':
-        ydl_opts = {
-            'format': 'best[ext=mp4]/best[height<=720]/best',
-            'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
-            'quiet': True,
-            'progress_hooks': hooks,
-            'nocheckcertificate': True,
-            'ignoreerrors': False,
-        }
-    elif format_type == 'mp3':
-        ydl_opts = {
-            'format': 'bestaudio[ext=m4a]/bestaudio/best',
-            'extractaudio': True,
-            'audioformat': 'mp3',
-            'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }],
-            'quiet': True,
-            'progress_hooks': hooks,
-            'nocheckcertificate': True,
-            'ignoreerrors': False,
-        }
+    # Use the specific format_id provided
+    ydl_opts = {
+        'format': format_spec,
+        'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
+        'quiet': True,
+        'progress_hooks': hooks,
+        'nocheckcertificate': True,
+        'ignoreerrors': False,
+    }
+
+    # Add postprocessing for audio formats
+    if 'audio' in format_spec.lower() or format_spec.endswith('mp3') or format_spec.endswith('m4a'):
+        ydl_opts['postprocessors'] = [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }]
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:

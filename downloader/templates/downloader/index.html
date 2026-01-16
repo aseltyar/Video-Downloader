@@ -6,24 +6,23 @@
     {% if error %}
         <div class="error">{{ error }}</div>
     {% endif %}
-    <form id="downloadForm">
+    <form id="formatForm">
         {% csrf_token %}
         <div class="form-group">
             <label for="url">Video URL:</label>
             <input type="url" id="url" name="url" required placeholder="https://www.youtube.com/watch?v=...">
         </div>
 
-        <div class="form-group">
-            <label for="format">Format:</label>
-            <select id="format" name="format" required>
-                <option value="">Select Format</option>
-                <option value="mp4">MP4 (Video)</option>
-                <option value="mp3">MP3 (Audio)</option>
-            </select>
-        </div>
-
-        <button type="submit">Download</button>
+        <button type="button" id="getFormatsBtn">Get Available Formats</button>
     </form>
+
+    <div id="formatsContainer" style="display: none;">
+        <h3>Select Format:</h3>
+        <select id="formatSelect" style="width: 100%; padding: 10px; margin: 10px 0;">
+            <option value="">Choose a format...</option>
+        </select>
+        <button id="downloadBtn" style="display: none;">Download Selected Format</button>
+    </div>
 
     <div id="progressContainer" style="display: none;">
         <h3>Downloading...</h3>
@@ -40,25 +39,87 @@ document.getElementById('url').addEventListener('input', function() {
     if (errorDiv) {
         errorDiv.style.display = 'none';
     }
+    // Hide formats when URL changes
+    document.getElementById('formatsContainer').style.display = 'none';
+    document.getElementById('downloadBtn').style.display = 'none';
 });
 
-document.getElementById('downloadForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    const formData = new FormData(this);
+document.getElementById('getFormatsBtn').addEventListener('click', function() {
+    const url = document.getElementById('url').value.trim();
+    if (!url) {
+        alert('Please enter a URL first');
+        return;
+    }
+
+    this.textContent = 'Loading formats...';
+    this.disabled = true;
 
     fetch('', {
         method: 'POST',
         headers: {
+            'Content-Type': 'application/json',
             'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
         },
-        body: formData
+        body: JSON.stringify({
+            action: 'get_formats',
+            url: url
+        })
     })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
+    .then(response => response.json())
+    .then(result => {
+        if (result.error) {
+            alert(result.error);
+        } else {
+            displayFormats(result.formats);
         }
-        return response.json();
     })
+    .catch(error => {
+        alert('Error getting formats: ' + error);
+    })
+    .finally(() => {
+        this.textContent = 'Get Available Formats';
+        this.disabled = false;
+    });
+});
+
+function displayFormats(formats) {
+    const select = document.getElementById('formatSelect');
+    select.innerHTML = '<option value="">Choose a format...</option>';
+
+    formats.forEach(format => {
+        const option = document.createElement('option');
+        option.value = format.format_id;
+        option.textContent = `${format.label} (${format.filesize_str})`;
+        select.appendChild(option);
+    });
+
+    document.getElementById('formatsContainer').style.display = 'block';
+    document.getElementById('downloadBtn').style.display = 'block';
+}
+
+document.getElementById('downloadBtn').addEventListener('click', function() {
+    const url = document.getElementById('url').value.trim();
+    const formatId = document.getElementById('formatSelect').value;
+
+    if (!formatId) {
+        alert('Please select a format');
+        return;
+    }
+
+    // Start download
+    fetch('', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: JSON.stringify({
+            action: 'download',
+            url: url,
+            format_id: formatId
+        })
+    })
+    .then(response => response.json())
     .then(result => {
         if (result.error) {
             alert(result.error);
@@ -67,12 +128,13 @@ document.getElementById('downloadForm').addEventListener('submit', function(e) {
         }
     })
     .catch(error => {
-        alert('Error: ' + error.message);
+        alert('Error starting download: ' + error);
     });
 });
 
 function pollProgress(progressId) {
-    document.getElementById('downloadForm').style.display = 'none';
+    document.getElementById('formatForm').style.display = 'none';
+    document.getElementById('formatsContainer').style.display = 'none';
     document.getElementById('progressContainer').style.display = 'block';
 
     const interval = setInterval(() => {
@@ -81,11 +143,11 @@ function pollProgress(progressId) {
         .then(data => {
             if (data.status === 'downloading') {
                 document.getElementById('progressFill').style.width = data.percent + '%';
-                document.getElementById('progressText').textContent = `${data.percent}% - ${data.speed} - ETA: ${data.eta}`;
+                document.getElementById('progressText').textContent = `${data.percent}% - ${data.speed || 'N/A'} - ETA: ${data.eta || 'N/A'}`;
             } else if (data.status === 'finished' || data.status === 'completed') {
                 clearInterval(interval);
                 document.getElementById('progressFill').style.width = '100%';
-                document.getElementById('progressText').textContent = 'Download complete! Starting download...';
+                document.getElementById('progressText').textContent = 'Download completed! Starting download...';
                 setTimeout(() => {
                     window.location.href = `/download/${progressId}/`;
                 }, 1000);
