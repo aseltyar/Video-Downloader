@@ -10,30 +10,37 @@ from .downloader import download_video, is_valid_url
 def index(request):
     if request.method == 'POST':
         if request.headers.get('Content-Type') == 'application/json' or request.POST.get('ajax'):
-            # AJAX request
-            import json
-            data = json.loads(request.body) if request.headers.get('Content-Type') == 'application/json' else request.POST
-            url = data.get('url', '').strip()
-            format_type = data.get('format', '')
+            try:
+                # AJAX request
+                import json
+                data = json.loads(request.body) if request.headers.get('Content-Type') == 'application/json' else request.POST
+                url = data.get('url', '').strip()
+                format_type = data.get('format', '')
 
-            if not url or not is_valid_url(url) or format_type not in ['mp4', 'mp3']:
-                return JsonResponse({'error': 'Invalid input'})
+                if not url:
+                    return JsonResponse({'error': 'URL is required'})
+                if not is_valid_url(url):
+                    return JsonResponse({'error': 'Invalid URL'})
+                if format_type not in ['mp4', 'mp3']:
+                    return JsonResponse({'error': 'Invalid format selected'})
 
-            progress_id = str(uuid.uuid4())
-            cache.set(progress_id, {'status': 'queued'}, 300)
+                progress_id = str(uuid.uuid4())
+                cache.set(progress_id, {'status': 'queued'}, 300)
 
-            # Start download in background
-            def download_task():
-                try:
-                    file_path = download_video(url, format_type, progress_id)
-                    cache.set(f"{progress_id}_file", file_path, 3600)  # Store file path for 1 hour
-                except Exception as e:
-                    cache.set(progress_id, {'status': 'error', 'error': str(e)}, 300)
+                # Start download in background
+                def download_task():
+                    try:
+                        file_path = download_video(url, format_type, progress_id)
+                        cache.set(f"{progress_id}_file", file_path, 3600)  # Store file path for 1 hour
+                    except Exception as e:
+                        cache.set(progress_id, {'status': 'error', 'error': str(e)}, 300)
 
-            thread = threading.Thread(target=download_task)
-            thread.start()
+                thread = threading.Thread(target=download_task)
+                thread.start()
 
-            return JsonResponse({'progress_id': progress_id})
+                return JsonResponse({'progress_id': progress_id})
+            except Exception as e:
+                return JsonResponse({'error': f'Server error: {str(e)}'})
         else:
             # Regular POST, redirect or handle
             return JsonResponse({'error': 'Use AJAX'})
