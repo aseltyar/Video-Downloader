@@ -1,3 +1,4 @@
 Django==6.0.1
 yt-dlp==2025.12.8
 gunicorn==23.0.0
+whitenoise==6.6.0
