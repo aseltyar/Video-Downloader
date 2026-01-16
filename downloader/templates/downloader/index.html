@@ -45,20 +45,20 @@ document.getElementById('url').addEventListener('input', function() {
 document.getElementById('downloadForm').addEventListener('submit', function(e) {
     e.preventDefault();
     const formData = new FormData(this);
-    const data = {
-        url: formData.get('url'),
-        format: formData.get('format')
-    };
 
     fetch('', {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json',
             'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
         },
-        body: JSON.stringify(data)
+        body: formData
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();
+    })
     .then(result => {
         if (result.error) {
             alert(result.error);
@@ -67,7 +67,7 @@ document.getElementById('downloadForm').addEventListener('submit', function(e) {
         }
     })
     .catch(error => {
-        alert('Error: ' + error);
+        alert('Error: ' + error.message);
     });
 });
 
