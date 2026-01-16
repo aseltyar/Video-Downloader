@@ -73,14 +73,16 @@ def download_video(url: str, format_type: str, progress_id: str = None) -> str:
 
     if format_type == 'mp4':
         ydl_opts = {
-            'format': 'best[ext=mp4]/best',
+            'format': 'best[ext=mp4]/best[height<=720]/best',
             'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
             'quiet': True,
             'progress_hooks': hooks,
+            'nocheckcertificate': True,
+            'ignoreerrors': False,
         }
     elif format_type == 'mp3':
         ydl_opts = {
-            'format': 'bestaudio/best',
+            'format': 'bestaudio[ext=m4a]/bestaudio/best',
             'extractaudio': True,
             'audioformat': 'mp3',
             'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
@@ -91,6 +93,8 @@ def download_video(url: str, format_type: str, progress_id: str = None) -> str:
             }],
             'quiet': True,
             'progress_hooks': hooks,
+            'nocheckcertificate': True,
+            'ignoreerrors': False,
         }
 
     try:
@@ -100,8 +104,18 @@ def download_video(url: str, format_type: str, progress_id: str = None) -> str:
             # If mp3, the filename will be updated after postprocessing
             if format_type == 'mp3':
                 filename = filename.rsplit('.', 1)[0] + '.mp3'
+
+            # Verify file exists and has content
+            if not os.path.exists(filename):
+                raise Exception("Downloaded file not found")
+
+            file_size = os.path.getsize(filename)
+            if file_size == 0:
+                os.remove(filename)  # Clean up empty file
+                raise Exception("Downloaded file is empty")
+
             if progress_id:
-                cache.set(progress_id, {'status': 'completed', 'filename': filename}, 300)
+                cache.set(progress_id, {'status': 'completed', 'filename': filename, 'size': file_size}, 300)
             return filename
     except Exception as e:
         logger.error(f"Download error: {e}")
