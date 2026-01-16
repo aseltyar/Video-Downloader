@@ -11,7 +11,7 @@ from .downloader import download_video, is_valid_url
 @csrf_exempt
 def index(request):
     if request.method == 'POST':
-        if request.headers.get('Content-Type') == 'application/json' or request.POST.get('ajax'):
+        if request.headers.get('Content-Type') == 'application/json' or request.POST.get('ajax') or request.POST.get('url'):
             try:
                 # AJAX request
                 import json
