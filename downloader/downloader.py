@@ -60,26 +60,42 @@ def get_available_formats(url: str, cookies: str = None) -> list:
                     'fps': f.get('fps'),
                 }
 
-                # Categorize formats
+                # Categorize formats and add type prefix to format_id
                 if f.get('vcodec') != 'none' and f.get('acodec') != 'none':
                     format_info['type'] = 'video+audio'
-                    format_info['label'] = f"{f.get('resolution', 'Unknown')} - {format_info['ext'].upper()}"
+                    format_info['format_id'] = f"video_audio_{f.get('format_id', '')}"
+                    format_info['label'] = f"🎥 {f.get('resolution', 'Unknown')} Video+Audio - {format_info['ext'].upper()}"
                 elif f.get('vcodec') != 'none':
                     format_info['type'] = 'video'
-                    format_info['label'] = f"Video {f.get('resolution', 'Unknown')} - {format_info['ext'].upper()}"
+                    format_info['format_id'] = f"video_{f.get('format_id', '')}"
+                    format_info['label'] = f"🎬 Video {f.get('resolution', 'Unknown')} (with audio) - {format_info['ext'].upper()}"
                 elif f.get('acodec') != 'none':
                     format_info['type'] = 'audio'
-                    format_info['label'] = f"Audio {f.get('abr', 'Unknown')}kbps - {format_info['ext'].upper()}"
+                    format_info['format_id'] = f"audio_{f.get('format_id', '')}"
+                    format_info['label'] = f"🎵 Audio {f.get('abr', 'Unknown')}kbps - MP3"
                 else:
                     continue
 
                 formats.append(format_info)
 
-            # Sort by quality (video first, then audio)
-            formats.sort(key=lambda x: (
-                0 if x['type'] == 'video+audio' else 1 if x['type'] == 'video' else 2,
-                x.get('filesize') or 0
-            ), reverse=True)
+            # Sort by quality prioritizing video+audio, then video, then audio
+            def sort_key(x):
+                type_priority = {
+                    'video+audio': 0,
+                    'video': 1,
+                    'audio': 2
+                }
+                # For resolution sorting, extract height from resolution string
+                resolution = x.get('resolution', '0p')
+                height = int(''.join(filter(str.isdigit, resolution))) if resolution != 'unknown' else 0
+
+                return (
+                    type_priority.get(x['type'], 3),
+                    height,  # Higher resolution first
+                    x.get('filesize') or 0  # Larger files (better quality) first
+                )
+
+            formats.sort(key=sort_key, reverse=True)
 
             return formats[:20]  # Limit to top 20 formats
 
@@ -143,16 +159,54 @@ def download_video(url: str, format_spec: str, progress_id: str = None, cookies:
         hooks.append(_progress_hook(progress_id))
         cache.set(progress_id, {'status': 'starting'}, 300)
 
-    # Use the specific format_id provided
-    ydl_opts = {
-        'format': format_spec,
-        'outtmpl': os.path.join(download_dir, '%(title)s.%(ext)s'),
-        'quiet': True,
-        'progress_hooks': hooks,
-        'nocheckcertificate': True,
-        'ignoreerrors': False,
-        'no_warnings': True,
-    }
+    # Determine the best format specification based on user selection
+    if format_spec.startswith('video_audio_'):
+        # User selected a combined video+audio format
+        actual_format = format_spec.replace('video_audio_', '')
+        ydl_opts = {
+            'format': actual_format,
+            'outtmpl': os.path.join(download_dir, '%(title)s.%(ext)s'),
+            'quiet': True,
+            'progress_hooks': hooks,
+            'nocheckcertificate': True,
+            'ignoreerrors': False,
+            'no_warnings': True,
+        }
+    elif format_spec.startswith('video_'):
+        # User selected video-only, merge with best audio
+        video_format = format_spec.replace('video_', '')
+        ydl_opts = {
+            'format': f'{video_format}+bestaudio',
+            'outtmpl': os.path.join(download_dir, '%(title)s.%(ext)s'),
+            'quiet': True,
+            'progress_hooks': hooks,
+            'nocheckcertificate': True,
+            'ignoreerrors': False,
+            'no_warnings': True,
+        }
+    elif format_spec.startswith('audio_'):
+        # Audio-only format
+        actual_format = format_spec.replace('audio_', '')
+        ydl_opts = {
+            'format': actual_format,
+            'outtmpl': os.path.join(download_dir, '%(title)s.%(ext)s'),
+            'quiet': True,
+            'progress_hooks': hooks,
+            'nocheckcertificate': True,
+            'ignoreerrors': False,
+            'no_warnings': True,
+        }
+    else:
+        # Fallback: try to get best combined format, or merge if necessary
+        ydl_opts = {
+            'format': 'bestvideo[height<=1080]+bestaudio/best[height<=1080]',
+            'outtmpl': os.path.join(download_dir, '%(title)s.%(ext)s'),
+            'quiet': True,
+            'progress_hooks': hooks,
+            'nocheckcertificate': True,
+            'ignoreerrors': False,
+            'no_warnings': True,
+        }
 
     if cookies:
         # Save cookies to a temporary file
@@ -161,8 +215,8 @@ def download_video(url: str, format_spec: str, progress_id: str = None, cookies:
             f.write(cookies)
             ydl_opts['cookiefile'] = f.name
 
-    # Add postprocessing for audio formats
-    if any(audio_ind in format_spec.lower() for audio_ind in ['audio', 'mp3', 'm4a', 'aac', 'flac']):
+    # Add postprocessing for audio-only formats
+    if format_spec.startswith('audio_'):
         ydl_opts['postprocessors'] = [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
@@ -175,8 +229,8 @@ def download_video(url: str, format_spec: str, progress_id: str = None, cookies:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
 
-            # If audio format, the filename will be updated after postprocessing
-            if any(audio_ind in format_spec.lower() for audio_ind in ['audio', 'mp3', 'm4a', 'aac', 'flac']):
+            # If audio-only format, the filename will be updated after postprocessing
+            if format_spec.startswith('audio_'):
                 # Wait a bit for postprocessing to complete
                 import time
                 time.sleep(1)
