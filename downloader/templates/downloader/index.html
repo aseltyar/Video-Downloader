@@ -51,6 +51,7 @@ document.getElementById('getFormatsBtn').addEventListener('click', function() {
         return;
     }
 
+    console.log('Getting formats for URL:', url);
     this.textContent = 'Loading formats...';
     this.disabled = true;
 
@@ -65,8 +66,12 @@ document.getElementById('getFormatsBtn').addEventListener('click', function() {
             url: url
         })
     })
-    .then(response => response.json())
+    .then(response => {
+        console.log('Formats response status:', response.status);
+        return response.json();
+    })
     .then(result => {
+        console.log('Formats result:', result);
         if (result.error) {
             alert(result.error);
         } else {
@@ -74,6 +79,7 @@ document.getElementById('getFormatsBtn').addEventListener('click', function() {
         }
     })
     .catch(error => {
+        console.error('Error getting formats:', error);
         alert('Error getting formats: ' + error);
     })
     .finally(() => {
@@ -101,6 +107,8 @@ document.getElementById('downloadBtn').addEventListener('click', function() {
     const url = document.getElementById('url').value.trim();
     const formatId = document.getElementById('formatSelect').value;
 
+    console.log('Starting download with URL:', url, 'Format:', formatId);
+
     if (!formatId) {
         alert('Please select a format');
         return;
@@ -119,8 +127,12 @@ document.getElementById('downloadBtn').addEventListener('click', function() {
             format_id: formatId
         })
     })
-    .then(response => response.json())
+    .then(response => {
+        console.log('Download response status:', response.status);
+        return response.json();
+    })
     .then(result => {
+        console.log('Download result:', result);
         if (result.error) {
             alert(result.error);
         } else {
@@ -128,6 +140,7 @@ document.getElementById('downloadBtn').addEventListener('click', function() {
         }
     })
     .catch(error => {
+        console.error('Error starting download:', error);
         alert('Error starting download: ' + error);
     });
 });
