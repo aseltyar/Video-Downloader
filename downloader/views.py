@@ -19,17 +19,19 @@ def index(request):
 
                 if action == 'get_formats':
                     url = data.get('url', '').strip()
+                    cookies = data.get('cookies', '').strip()
                     if not url:
                         return JsonResponse({'error': 'URL is required'})
                     if not is_valid_url(url):
                         return JsonResponse({'error': 'Invalid URL'})
 
-                    formats = get_available_formats(url)
+                    formats = get_available_formats(url, cookies if cookies else None)
                     return JsonResponse({'formats': formats})
 
                 elif action == 'download':
                     url = data.get('url', '').strip()
                     format_id = data.get('format_id', '')
+                    cookies = data.get('cookies', '').strip()
 
                     if not url or not format_id:
                         return JsonResponse({'error': 'URL and format are required'})
@@ -40,7 +42,7 @@ def index(request):
                     # Start download in background
                     def download_task():
                         try:
-                            file_path = download_video(url, format_id, progress_id)
+                            file_path = download_video(url, format_id, progress_id, cookies if cookies else None)
                             cache.set(f"{progress_id}_file", file_path, 3600)
                         except Exception as e:
                             cache.set(progress_id, {'status': 'error', 'error': str(e)}, 300)

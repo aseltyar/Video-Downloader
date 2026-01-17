@@ -16,12 +16,13 @@ def is_valid_url(url: str) -> bool:
     except:
         return False
 
-def get_available_formats(url: str) -> list:
+def get_available_formats(url: str, cookies: str = None) -> list:
     """
     Get available formats for a video URL.
 
     Args:
         url (str): The URL to get formats for.
+        cookies (str): Optional cookies string for authentication.
 
     Returns:
         list: List of available formats with metadata.
@@ -30,7 +31,15 @@ def get_available_formats(url: str) -> list:
         raise ValueError("Invalid URL provided.")
 
     try:
-        with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
+        ydl_opts = {'quiet': True}
+        if cookies:
+            # Save cookies to a temporary file
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+                f.write(cookies)
+                ydl_opts['cookiefile'] = f.name
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             formats = []
 
@@ -102,7 +111,7 @@ def _progress_hook(progress_id):
             }, 300)
     return hook
 
-def download_video(url: str, format_spec: str, progress_id: str = None) -> str:
+def download_video(url: str, format_spec: str, progress_id: str = None, cookies: str = None) -> str:
     """
     Download video or audio from the given URL.
 
@@ -110,6 +119,7 @@ def download_video(url: str, format_spec: str, progress_id: str = None) -> str:
         url (str): The URL to download from.
         format_spec (str): Format specification (format_id from yt-dlp).
         progress_id (str): Optional ID for progress tracking.
+        cookies (str): Optional cookies string for authentication.
 
     Returns:
         str: Path to the downloaded file.
@@ -143,6 +153,13 @@ def download_video(url: str, format_spec: str, progress_id: str = None) -> str:
         'ignoreerrors': False,
         'no_warnings': True,
     }
+
+    if cookies:
+        # Save cookies to a temporary file
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+            f.write(cookies)
+            ydl_opts['cookiefile'] = f.name
 
     # Add postprocessing for audio formats
     if any(audio_ind in format_spec.lower() for audio_ind in ['audio', 'mp3', 'm4a', 'aac', 'flac']):

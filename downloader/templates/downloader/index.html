@@ -13,6 +13,12 @@
             <input type="url" id="url" name="url" required placeholder="https://www.youtube.com/watch?v=...">
         </div>
 
+        <div class="form-group">
+            <label for="cookies">Browser Cookies (Optional - required for Instagram/Twitter login):</label>
+            <textarea id="cookies" name="cookies" rows="3" placeholder="Paste cookies from your browser (Netscape format). For Instagram/Twitter, you need to be logged in."></textarea>
+            <small class="text-muted">Note: Instagram and some Twitter content require authentication. Export cookies from your browser when logged in.</small>
+        </div>
+
         <button type="button" id="getFormatsBtn" placeholder="Quality">Next</button>
     </form>
 
@@ -42,16 +48,32 @@ document.getElementById('url').addEventListener('input', function() {
     // Hide formats when URL changes
     document.getElementById('formatsContainer').style.display = 'none';
     document.getElementById('downloadBtn').style.display = 'none';
+
+    // Show warning for Instagram/Twitter URLs
+    const url = this.value.trim();
+    const cookieNote = document.querySelector('.text-muted');
+    if (url.includes('instagram.com') || url.includes('twitter.com') || url.includes('x.com')) {
+        if (cookieNote) {
+            cookieNote.innerHTML = '<strong>⚠️ Note:</strong> This platform requires authentication. You must be logged in and provide browser cookies to download private/restricted content.';
+            cookieNote.style.color = '#d9534f';
+        }
+    } else {
+        if (cookieNote) {
+            cookieNote.innerHTML = 'Note: Instagram and some Twitter content require authentication. Export cookies from your browser when logged in.';
+            cookieNote.style.color = '';
+        }
+    }
 });
 
 document.getElementById('getFormatsBtn').addEventListener('click', function() {
     const url = document.getElementById('url').value.trim();
+    const cookies = document.getElementById('cookies').value.trim();
     if (!url) {
         alert('Please enter a URL first');
         return;
     }
 
-    console.log('Getting formats for URL:', url);
+    console.log('Getting formats for URL:', url, 'Cookies provided:', cookies ? 'Yes' : 'No');
     this.textContent = 'Loading formats...';
     this.disabled = true;
 
@@ -63,7 +85,8 @@ document.getElementById('getFormatsBtn').addEventListener('click', function() {
         },
         body: JSON.stringify({
             action: 'get_formats',
-            url: url
+            url: url,
+            cookies: cookies
         })
     })
     .then(response => {
@@ -106,8 +129,9 @@ function displayFormats(formats) {
 document.getElementById('downloadBtn').addEventListener('click', function() {
     const url = document.getElementById('url').value.trim();
     const formatId = document.getElementById('formatSelect').value;
+    const cookies = document.getElementById('cookies').value.trim();
 
-    console.log('Starting download with URL:', url, 'Format:', formatId);
+    console.log('Starting download with URL:', url, 'Format:', formatId, 'Cookies provided:', cookies ? 'Yes' : 'No');
 
     if (!formatId) {
         alert('Please select a format');
@@ -124,7 +148,8 @@ document.getElementById('downloadBtn').addEventListener('click', function() {
         body: JSON.stringify({
             action: 'download',
             url: url,
-            format_id: formatId
+            format_id: formatId,
+            cookies: cookies
         })
     })
     .then(response => {
