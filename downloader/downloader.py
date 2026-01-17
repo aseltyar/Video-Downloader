@@ -41,9 +41,24 @@ def get_available_formats(url: str, cookies: str = None) -> list:
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
+
+            # Debug logging
+            if info is None:
+                logger.error(f"extract_info returned None for URL: {url}")
+                raise Exception("Failed to extract video information. Video may be unavailable or require authentication.")
+
+            formats_list = info.get('formats')
+            if formats_list is None:
+                logger.error(f"No formats found in info for URL: {url}")
+                raise Exception("No video formats available. Video may be private or unavailable.")
+
+            if not isinstance(formats_list, list):
+                logger.error(f"Formats is not a list for URL: {url}, got: {type(formats_list)}")
+                raise Exception("Invalid format data received from server.")
+
             formats = []
 
-            for f in info.get('formats', []):
+            for f in formats_list:
                 # Filter out very low quality or problematic formats
                 if f.get('filesize') and f.get('filesize') < 1024:  # Skip <1KB files
                     continue
@@ -96,6 +111,10 @@ def get_available_formats(url: str, cookies: str = None) -> list:
                 )
 
             formats.sort(key=sort_key, reverse=True)
+
+            if not formats:
+                logger.error(f"No valid formats found after filtering for URL: {url}")
+                raise Exception("No downloadable formats found. The video may be private, deleted, or unavailable.")
 
             return formats[:20]  # Limit to top 20 formats
 
