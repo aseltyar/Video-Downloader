@@ -40,7 +40,11 @@ def get_available_formats(url: str, cookies: str = None) -> list:
                 ydl_opts['cookiefile'] = f.name
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
+            try:
+                info = ydl.extract_info(url, download=False)
+            except Exception as extract_error:
+                logger.error(f"extract_info failed for URL {url}: {extract_error}")
+                raise Exception(f"Failed to extract video information: {str(extract_error)}")
 
             # Debug logging
             if info is None:
@@ -50,6 +54,7 @@ def get_available_formats(url: str, cookies: str = None) -> list:
             formats_list = info.get('formats')
             if formats_list is None:
                 logger.error(f"No formats found in info for URL: {url}")
+                logger.error(f"Info keys: {list(info.keys()) if isinstance(info, dict) else 'Not a dict'}")
                 raise Exception("No video formats available. Video may be private or unavailable.")
 
             if not isinstance(formats_list, list):
