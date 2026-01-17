@@ -13,7 +13,7 @@
             <input type="url" id="url" name="url" required placeholder="https://www.youtube.com/watch?v=...">
         </div>
 
-        <button type="button" id="getFormatsBtn">Get Available Formats</button>
+        <button type="button" id="getFormatsBtn" placeholder="Quality">Next</button>
     </form>
 
     <div id="formatsContainer" style="display: none;">
@@ -83,7 +83,7 @@ document.getElementById('getFormatsBtn').addEventListener('click', function() {
         alert('Error getting formats: ' + error);
     })
     .finally(() => {
-        this.textContent = 'Get Available Formats';
+        this.textContent = 'Next';
         this.disabled = false;
     });
 });
