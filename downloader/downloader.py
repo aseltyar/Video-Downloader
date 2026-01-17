@@ -44,7 +44,7 @@ def get_available_formats(url: str) -> list:
                     'ext': f.get('ext', 'unknown'),
                     'resolution': f.get('resolution', 'unknown') if f.get('vcodec') != 'none' else None,
                     'filesize': f.get('filesize'),
-                    'filesize_str': f.get('filesize', 0) and f"{f['filesize'] / (1024*1024):.1f}MB" or 'Unknown',
+                    'filesize_str': f.get('filesize') and f"{f['filesize'] / (1024*1024):.1f}MB" or 'Unknown',
                     'vcodec': f.get('vcodec', 'none'),
                     'acodec': f.get('acodec', 'none'),
                     'format_note': f.get('format_note', ''),
@@ -93,10 +93,8 @@ def _progress_hook(progress_id):
                 'eta': d.get('_eta_str', 'N/A'),
             }, 300)  # Expire in 5 minutes
         elif d['status'] == 'finished':
-            cache.set(progress_id, {
-                'status': 'finished',
-                'filename': d['filename'],
-            }, 300)
+            # Don't update cache here, let the main function handle completion
+            pass
         elif d['status'] == 'error':
             cache.set(progress_id, {
                 'status': 'error',
@@ -110,25 +108,25 @@ def download_video(url: str, format_spec: str, progress_id: str = None) -> str:
 
     Args:
         url (str): The URL to download from.
-        format_type (str): 'mp4' for video, 'mp3' for audio.
+        format_spec (str): Format specification (format_id from yt-dlp).
         progress_id (str): Optional ID for progress tracking.
 
     Returns:
         str: Path to the downloaded file.
 
     Raises:
-        ValueError: If URL is invalid or format is unsupported.
+        ValueError: If URL is invalid.
         Exception: For download errors.
     """
     if not is_valid_url(url):
         raise ValueError("Invalid URL provided.")
 
-    # No format validation needed since we're using specific format IDs
+    if not format_spec or format_spec == "":
+        raise ValueError("Format specification is required.")
 
     # Create a downloads directory in MEDIA_ROOT
     download_dir = os.path.join(settings.MEDIA_ROOT, 'downloads')
     os.makedirs(download_dir, exist_ok=True)
-    temp_dir = download_dir
 
     hooks = []
     if progress_id:
@@ -138,15 +136,16 @@ def download_video(url: str, format_spec: str, progress_id: str = None) -> str:
     # Use the specific format_id provided
     ydl_opts = {
         'format': format_spec,
-        'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
+        'outtmpl': os.path.join(download_dir, '%(title)s.%(ext)s'),
         'quiet': True,
         'progress_hooks': hooks,
         'nocheckcertificate': True,
         'ignoreerrors': False,
+        'no_warnings': True,
     }
 
     # Add postprocessing for audio formats
-    if 'audio' in format_spec.lower() or format_spec.endswith('mp3') or format_spec.endswith('m4a'):
+    if any(audio_ind in format_spec.lower() for audio_ind in ['audio', 'mp3', 'm4a', 'aac', 'flac']):
         ydl_opts['postprocessors'] = [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
@@ -154,24 +153,41 @@ def download_video(url: str, format_spec: str, progress_id: str = None) -> str:
         }]
 
     try:
+        logger.info(f"Starting download with format: {format_spec}")
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
+
             # If audio format, the filename will be updated after postprocessing
-            if 'audio' in format_spec.lower() or 'mp3' in format_spec.lower():
+            if any(audio_ind in format_spec.lower() for audio_ind in ['audio', 'mp3', 'm4a', 'aac', 'flac']):
+                # Wait a bit for postprocessing to complete
+                import time
+                time.sleep(1)
                 filename = filename.rsplit('.', 1)[0] + '.mp3'
+
+            logger.info(f"Expected filename: {filename}")
 
             # Verify file exists and has content
             if not os.path.exists(filename):
-                raise Exception("Downloaded file not found")
+                # Try to find the file with different extensions
+                base_name = filename.rsplit('.', 1)[0]
+                for ext in ['.mp4', '.webm', '.m4a', '.mp3']:
+                    alt_filename = base_name + ext
+                    if os.path.exists(alt_filename):
+                        filename = alt_filename
+                        break
+                else:
+                    raise Exception(f"Downloaded file not found. Expected: {filename}")
 
             file_size = os.path.getsize(filename)
             if file_size == 0:
                 os.remove(filename)  # Clean up empty file
                 raise Exception("Downloaded file is empty")
 
+            logger.info(f"Download completed: {filename} ({file_size} bytes)")
+
             if progress_id:
-                cache.set(progress_id, {'status': 'completed', 'filename': filename, 'size': file_size}, 300)
+                cache.set(progress_id, {'status': 'completed', 'filename': filename, 'size': file_size}, 3600)
             return filename
     except Exception as e:
         logger.error(f"Download error: {e}")
